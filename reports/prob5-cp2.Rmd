@@ -5,6 +5,8 @@ output:
   html_notebook: default
 ---
 
+## 1. Importando as bibliotecas
+
 ```{r warning=FALSE, echo=FALSE}
 library(tidyverse)
 library(broom)
@@ -23,11 +25,16 @@ paleta = c("#404E4D",
            "#F4743B")
 ```
 
+## 2. Descrição e Dados
 
-## Dados sobre beleza e avaliação de professores da Universidade do Texas em Austin 
+Neste documento, vamos utilizar regressão para analisar uma amostra de dados. Esses dados foram coletados a partir das avaliações discentes de final de semestre de uma grande amostra de professores da Universidade do Texas em Austin. As avaliações são feitas anonimamente, o que significa que os professores não sabem quem realizou as avaliações. Além disso, seis estudantes avaliaram a aparência física dos professores, representados na figura abaixo pelas variáveis bty_*. O resultado é um banco de dados no qual cada linha contém diferentes disciplinas e cada coluna representa as variáveis sobre as disciplinas e os professores. As variáveis contidas nele estão representadas na figura abaixo.  
 
-![Variáveis e suas descrições](figuras/vars.png)
 
+![**Figura 1:** Variáveis e suas descrições](figuras/vars.png)
+
+Nossa análise busca entender a relação entre a aparência física do professor e as avaliações recebidas por ele dos alunos. Examinaremos a hipótese de que a beleza do professor influencia na percepção de competência dos alunos.
+
+Agora, vamos ler os dados e visualizar a distribuição das variáveis *score* e *bty_avg*, que representam, respectivamente, a avaliação recebida pelo professor e sua média de beleza, segundo seis alunos.
 
 ```{r warning=FALSE, echo=FALSE}
 
@@ -44,21 +51,30 @@ avaliacoes %>%
 
 ```
 
-## Objetivo
-## Análises
+## 3. Análises
+
+#### 3.1 Modelando o efeito da beleza do professor no seu score:
+
+Começaremos nossa análise visualizando a relação entre as duas variáveis em questão (*score* e *bty_avg*). Lembrando que o *score* é a variável que representa a avaliação feita por vários de seus alunos, e a variável *bty_avg* é a média de beleza do professor com base na avaliação de 6 alunos. Vejamos:
+
 
 ```{r warning=FALSE, echo=FALSE}
 
 avaliacoes %>%
-ggplot(aes(x = score, y = bty_avg)) + 
+ggplot(aes(x = score, y = bty_avg)) +
   geom_point()
 
 
 
 ```
 
+A primeira impressão é de que parece existir uma relação. Porém essa relação não é muito forte, como podemos perceber no gráfico acima. Vamos agora modelar o efeito da beleza do professor no seu *score*, e ver se chegamos à mesma conclusão. Para isso, utilizaremos regressão linear simples:
+
+**Modelo:**
 
 ```{r warning=FALSE, echo=FALSE}
+
+set.seed(1)
 
 modelo1 = lm(score ~ bty_avg, data = avaliacoes)
 
@@ -69,11 +85,94 @@ glance(modelo1)
 
 ```
 
+**Visualizando o modelo:**
+
 ```{r warning=FALSE, echo=FALSE}
+avaliacoes_aumentadas = avaliacoes %>% 
+  add_predictions(modelo1) 
+
+avaliacoes_aumentadas %>% 
+  ggplot(aes(x =  bty_avg)) + 
+  geom_line(aes(y = pred), colour = "brown") + 
+  geom_point(aes(y = score)) + 
+   labs(x = "Média beleza") +
+  labs(y = "Score")
+```
+
+**O que podemos concluir do modelo:**
+
+Regressão linear simples foi utilizada para analisar se a média de beleza do professor tem uma associação significativa com seu *score*. Os resultados da regressão indicam que um modelo com o preditor no formato *score = 3.88033795 + 0.06663704xbty_avg* explica  apenas *3.3%* aprox. da variância da variável de resposta (*R2 = 0.03292903*). A variável *bty_avg* tem uma relação **significativa** com o erro (b = [0.03462292,	0.09865116], IC com 95%). Dizemos que a relação é significativa porque intervalo de confiança não inclui o zero. A **relevância** da beleza, no entanto,  não é muito grande para o score, isso porque o aumento de 1 unidade na média de beleza do professor produz uma mudança de apenas 0.06663704 no seu score, fato observado pelo valor da estimativa associada à variável *bty_avg*.
 
 
+#### 3.2 Modelo multivariado
+
+Vamos agora utilizar um modelo que inclua outras variáveis. Queremos, com isso, explicar melhor o *score* do professor e avaliar se o efeito da beleza é significativo quando levamos em conta outras variáveis que podem explicar a variação de avaliações. 
+
+Utilizaremos as seguintes variáveis independentes nesse modelo, assumindo algumas hipóteses:
+
+* **bty_avg:** a média da beleza.
+* **gender:** o gênero do professor. Vamos ver se o gênero causa efeito nas avaliações.
+* **cls_level:** o nível da disciplina, se é introdutória ou avançada. A hipótese é a de que quanto mais avançada a disciplina, maior a admiração dos alunos pelo professor. Vamos ver se isso faz sentido.
+* **pic_outfit:** a roupa do professor na foto, se é formal o informal. A hipótese é a de que uma roupa informal pode dar ao aluno a ideia de proximidade com o professor, aumentando a simpatia do aluno pelo professor. Vamos ver se isso faz sentido.  
+
+**Modelo:**
+
+```{r warning=FALSE, echo=FALSE}
+set.seed(1)
+
+modelo2 = lm(score ~ bty_avg + gender + cls_level + pic_outfit , data = avaliacoes)
+
+tidy(modelo2, conf.int = TRUE, conf.level = 0.95)
+glance(modelo2)
 
 ```
 
 
-## Conclusões
+**Visualizando o modelo:**
+
+```{r warning=FALSE, echo=FALSE}
+
+para_plotar_modelo = avaliacoes %>% 
+  data_grid(score = seq_range(score, 10), # Crie um vetor de 10 valores no range
+            bty_avg = seq_range(bty_avg, 4),  
+            gender = gender,
+            cls_level = cls_level,
+            pic_outfit = pic_outfit) %>% 
+  add_predictions(modelo2)
+
+glimpse(para_plotar_modelo)
+
+```
+
+
+```{r warning=FALSE, echo=FALSE}
+para_plotar_modelo %>% 
+  ggplot(aes(x = bty_avg, y = pred)) + 
+  geom_line(aes(group = gender, colour = gender)) + 
+  facet_grid(. ~ cls_level) + 
+  geom_point(data = avaliacoes, aes(y = score, colour = gender, shape = pic_outfit), size = 3) +
+  labs(title="Modelo Multivariado",
+       x="Média beleza", 
+       y="Score", 
+       color = "Gênero",
+       shape = "Roupa da foto")
+```
+
+
+**O que podemos concluir do modelo:**
+
+Apesar do gráfico acima ter muita informação, ele exibe todas as variáveis do modelo.
+
+Regressão linear foi utilizada para analisar se a média de beleza, o gênero, o nível da disciplina e a formalidade da roupa do professor têm uma associação significativa com seu *score*. Os resultados da regressão indicam que um modelo com o preditor no formato *score = 3.82315263 + 0.07266323xbty_avg + 0.16641163xgendermale - 0.07950959xcls_levelupper - 0.01584957xpic_outfitnot formal* explica apenas *6.38%* aprox. da variância da variável de resposta (*R2 = 0.06385044*).
+
+As variáveis *bty_avg* e *gender* têm uma relação **significativa**, com erros respectivos de [0.04047606,	0.10485041] e [0.06696548,	0.26585777] IC com 95% de confiança. Já as variáveis *cls_level* e *pic_outfit* não têm uma relação **significativa**, com erros respectivos de [-0.18235369,	0.02333451] e [-0.14764471,	0.11594558] IC com 95% de confiança.
+
+Em relação à **relevância**, podemos dizer que a variável *gender* é a mais relevante, pois o docente ser do gênero masculino produz uma mudança de 0.16641163 no seu score. A segunda variável mais relevante é a *cls_level*, isso porque se a disciplina for do nível avançado, o score diminui 0.07266323 ponto. Em seguida, a variável *bty_avg* tem uma relevância um pouco menor, pois o aumento de uma unidade provoca uma mudança de 0.07266323 no score. E, por último, a variável *pic_outfit* parece ser a menos relevante, por provocar uma mudança de apenas 0.01584957 no score, diminuindo-o se a roupa for informal.
+
+Quanto às hipóteses assumidas anteriormente, podemos ver que:
+
+* A questão do gênero realmente parece provocar um eveito no score, que tende a aumentar caso o docente seja do sexo masculino.
+* Quanto ao pressuposto de que o score subiria se o nível da disciplina fosse mais avançado: o contrário foi observado.
+* Quanto à hipótese de que o aluno simpatizaria mais com o professor que tivesse vestido de maneira mais informal: o contrário foi observado. Observamos, ainda, que esse foi o fator menos relevante, e ainda assim, sem significância.
+
+
